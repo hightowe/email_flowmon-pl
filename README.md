@@ -18,6 +18,16 @@ provider that led to emails not being forwarded and it took a few
 days for me to notice. Now I use this program to monitor that email
 flow end-to-end.
 
+## Example usage
+```bash
+hightowe@eden ~/bin $ ./email_flowmon.pl --verbose
+Test email sent: email_flowmon.pl test email 44559981144e2438b
+IMAP search found: 0
+IMAP search found: 0
+IMAP search found: 1
+Test was successful in 15 seconds.
+```
+
 ## Author and Platform
 Originally written September 24, 2024, by Lester Hightower and
 on Linux Mint 21. It should work on most Unix flavors.
