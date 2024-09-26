@@ -1,5 +1,5 @@
 # email_flowmon-pl
-Monitor email flow, end-to-end
+Monitor email flow, end-to-end.
 
 ## Summary
 A program to test email flow from origin to destination.
