@@ -54,7 +54,8 @@ die "Conf errors: ".Dumper(\@conf_errs)."\n" if (scalar(@conf_errs) > 0);
 
 # Build the MIME::Lite email object for our test email...
 my $randnum = ''; while (length($randnum) < 10) { $randnum .= int(rand(10)) }
-my $test_subject = basename(abs_path($0)) . " test email " . sprintf("%x%x", $randnum, scalar reverse("$randnum"));
+my $rand_subj_id = sprintf("%x%x", $randnum, scalar reverse("$randnum"));
+my $test_subject = basename(abs_path($0)) . " test email $rand_subj_id";
 #print "SUBJECT: $test_subject\n"; exit;
 my $email_msg = MIME::Lite->new(
 	#From     => $from,
@@ -109,7 +110,7 @@ if ($success) {
   exit 0;
 }
 
-die "The test email to $conf->{test_address} did not appear on the IMAP server within $max_time_to_try seconds.\n";
+die "The test email to $conf->{test_address} did not appear on the IMAP server within $max_time_to_try seconds.\n\nThe email subject contained ID: $rand_subj_id.\n";
 
 #########################################################################
 #########################################################################
