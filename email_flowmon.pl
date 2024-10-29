@@ -35,10 +35,12 @@ use Email::Simple;            # libemail-simple-perl
 use MIME::Lite;               # libmime-lite-perl
 
 $| = 1; # no buffering on stdio
+my $VERBOSE_FAILURES = 1; # To make failures more verbose
 
 my $APP_NAME = basename(abs_path($0));
 our $opts = MyGetOpts(); # Will only return with options we think we can use
 my $VERBOSE = $opts->{verbose};
+$VERBOSE_FAILURES = 1 if ($VERBOSE);
 
 # Load our config into $conf
 my $conf_text = read_file($opts->{conf});
@@ -102,6 +104,22 @@ TRIES: while (($time_left -= $retry_freq) > 0) {
   }
 }
 
+# If VERBOSE_FAILURES is true and we did not have success, show the
+# full inventory of messages in $imap->current_box.
+if ($VERBOSE_FAILURES && ! $success) {
+  # Loop over all of the messages
+  my $nm = $imap->select($imap->current_box) ||
+	die "IMAP select of current_box failed: " . $imap->errstr . "\n";
+  print "The IMAP current_box holds $nm messages, as follows:\n";
+  for(my $i = 1; $i <= $nm; $i++) {
+    my $seen = ' '; $seen = "*" if ($imap->seen($i));
+    my $es = Email::Simple->new(join '', @{ $imap->top($i) } );
+    my $msgsubj = $es->header('Subject');
+    printf("$seen [%03d] %s\n", $i, $msgsubj);
+  }
+  print "\n";
+}
+
 $imap->quit; # Also expunges the mailbox
 
 if ($success) {
@@ -137,8 +155,8 @@ sub find_email_with_subject_crawl($imap, $subject) {
   # Loop over all of the messages
   my $nm = $imap->select($imap->current_box) ||
 	die "IMAP select of current_box failed: " . $imap->errstr . "\n";
-  for(my $i = 1; $i <= $nm; $i++){
-    my $seen = ' '; $seen = "*" if($imap->seen($i));
+  for(my $i = 1; $i <= $nm; $i++) {
+    my $seen = ' '; $seen = "*" if ($imap->seen($i));
     my $es = Email::Simple->new(join '', @{ $imap->top($i) } );
     my $msgsubj = $es->header('Subject');
     printf("$seen [%03d] %s\n", $i, $msgsubj) if ($VERBOSE);
