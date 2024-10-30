@@ -51,8 +51,13 @@ foreach my $k (qw( imap test_address sendmail_exe )) {
   push @conf_errs, "Missing $k" if (!exists($conf->{imap}));
 }
 push @conf_errs, "Missing sendmail_exe binary" if (! -x $conf->{sendmail_exe});
+$conf->{imap}->{find_type} = 'search' if (!defined($conf->{imap}->{find_type}));
+push @conf_errs, "Invalid imap find_type" if ($conf->{imap}->{find_type} !~ m/^search|crawl$/);
 die "Conf errors: ".Dumper(\@conf_errs)."\n" if (scalar(@conf_errs) > 0);
 #print Dumper($conf)."\n";
+
+# Overrride test_address with --address if provided
+$conf->{test_address} = $opts->{address} if (defined($opts->{address}));
 
 # Build the MIME::Lite email object for our test email...
 my $randnum = ''; while (length($randnum) < 10) { $randnum .= int(rand(10)) }
@@ -79,8 +84,8 @@ my $imap = Net::IMAP::Simple->new($conf->{imap}->{host},
 if(!$imap->login($conf->{imap}->{user},$conf->{imap}->{pass})){
   die "IMAP login failed: " . $imap->errstr . "\n";
 }
-my $nm = $imap->select($conf->{imap}->{folder}) ||
-	die "IMAP select folder failed: " . $imap->errstr . "\n";
+my $nm = $imap->select($conf->{imap}->{folder});
+die "IMAP select folder failed: " . $imap->errstr . "\n" if (defined($imap->errstr));
 
 # Having successfully connected to the IMAP server, we can send our test email.
 # See the perldoc of MIME::Lite for how these sendmail options were chosen.
@@ -112,10 +117,9 @@ if ($VERBOSE_FAILURES && ! $success) {
 	die "IMAP select of current_box failed: " . $imap->errstr . "\n";
   print "The IMAP current_box holds $nm messages, as follows:\n";
   for(my $i = 1; $i <= $nm; $i++) {
-    my $seen = ' '; $seen = "*" if ($imap->seen($i));
     my $es = Email::Simple->new(join '', @{ $imap->top($i) } );
     my $msgsubj = $es->header('Subject');
-    printf("$seen [%03d] %s\n", $i, $msgsubj);
+    printf("[%03d] %s\n", $i, $msgsubj);
   }
   print "\n";
 }
@@ -139,27 +143,33 @@ die "The test email to $conf->{test_address} did not appear on the IMAP server w
 # in both of these else they just look at a static snapshot of the
 # folder and will not see new messages that have arrived. This code
 # was originally written to just crawl, but searching is much faster
-# if the IMAP server allows it and the folder has many messages.
+# if the IMAP server allows it and the folder has many messages. Crawl
+# support was kept because my IMAP provider's search is unreliable.
 sub find_email_with_subject($imap, $subject) {
-  #return find_email_with_subject_crawl($imap, $subject);
-  return find_email_with_subject_search($imap, $subject);
+  if ($conf->{imap}->{find_type} eq 'crawl') {
+    return find_email_with_subject_crawl($imap, $subject);
+  } else {
+    return find_email_with_subject_search($imap, $subject);
+  }
 }
 sub find_email_with_subject_search($imap, $subject) {
-  my $nm = $imap->select($imap->current_box) ||
-	die "IMAP select of current_box failed: " . $imap->errstr . "\n";
+  my $nm = $imap->select($imap->current_box);
+  die "IMAP select of current_box failed: " . $imap->errstr . "\n" if (defined($imap->errstr));
   my @msg_ids = $imap->search_subject($subject);
+  print "SEARCH imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
   printf("IMAP search found: %d\n", scalar(@msg_ids)) if ($VERBOSE);
   return($msg_ids[0]) if (scalar(@msg_ids) == 1); # If we found 1 msg, return it
 }
 sub find_email_with_subject_crawl($imap, $subject) {
   # Loop over all of the messages
-  my $nm = $imap->select($imap->current_box) ||
-	die "IMAP select of current_box failed: " . $imap->errstr . "\n";
+  my $nm = $imap->select($imap->current_box);
+  die "IMAP select of current_box failed: " . $imap->errstr . "\n" if (defined($imap->errstr));
+  print "SELECT imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
   for(my $i = 1; $i <= $nm; $i++) {
-    my $seen = ' '; $seen = "*" if ($imap->seen($i));
     my $es = Email::Simple->new(join '', @{ $imap->top($i) } );
+    print "TOP imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
     my $msgsubj = $es->header('Subject');
-    printf("$seen [%03d] %s\n", $i, $msgsubj) if ($VERBOSE);
+    printf("[%03d] %s\n", $i, $msgsubj) if ($VERBOSE);
     #warn "LHHD: $i - *$msgsubj* vs *$subject*\n";
     return $i if ($es->header('Subject') eq $subject); # Success (return msgnum)
   }
@@ -169,7 +179,7 @@ sub find_email_with_subject_crawl($imap, $subject) {
 # Get and validate command line options
 sub MyGetOpts {
   my %opts=();
-  my @params = ( "conf=s", "verbose", "help", "h", );
+  my @params = ( "conf=s", "address=s", "verbose", "help", "h", );
   my $result = &GetOptions(\%opts, @params);
 
   my $use_help_msg = "Use --help to see information on command line options.";
@@ -223,6 +233,7 @@ sub GetUsageMessage {
   my @params = (
     [ 'conf=s'  => "The config file to use." ],
     [ 'verbose' => 'Be verbose, else be silent except on failure.' ],
+    [ 'address' => "Override the conf's test_address with this one." ],
     [ help         => 'This message.' ],
   );
   my $t="Usage: $APP_NAME [--conf=<file.conf>]\n" .
