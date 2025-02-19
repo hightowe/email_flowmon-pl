@@ -165,13 +165,17 @@ sub find_email_with_subject_crawl($imap, $subject) {
   my $nm = $imap->select($imap->current_box);
   die "IMAP select of current_box failed: " . $imap->errstr . "\n" if (defined($imap->errstr));
   print "SELECT imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
-  for(my $i = 1; $i <= $nm; $i++) {
-    my $es = Email::Simple->new(join '', @{ $imap->top($i) } );
-    print "TOP imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
+  MSG: for (my $i = 1; $i <= $nm; $i++) {
+    my $hdr_lines = $imap->top($i);
+    if (!defined($hdr_lines) || ref($hdr_lines) ne 'ARRAY') {
+      print "TOP msg=$i imap->errstr: ".$imap->errstr."\n" if (defined($imap->errstr));
+      next MSG;
+    }
+    my $es = Email::Simple->new(join '', @{ $hdr_lines } );
     my $msgsubj = $es->header('Subject');
     printf("[%03d] %s\n", $i, $msgsubj) if ($VERBOSE);
     #warn "LHHD: $i - *$msgsubj* vs *$subject*\n";
-    return $i if ($es->header('Subject') eq $subject); # Success (return msgnum)
+    return $i if (defined($msgsubj) && $msgsubj eq $subject); # Success (return msgnum)
   }
   return 0; # Did not find a match...
 }
