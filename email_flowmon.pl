@@ -164,7 +164,7 @@ sub find_email_with_subject_crawl($imap, $subject) {
   # Loop over all of the messages
   my $nm = $imap->select($imap->current_box);
   die "IMAP select of current_box failed: " . $imap->errstr . "\n" if (defined($imap->errstr));
-  print "SELECT imap->errstr: ". $imap->errstr ."\n" if (defined($imap->errstr));
+  die "IMAP select of current_box returned \$nm=undef\n" if (! defined($nm)); # Saw 04/29/2025
   MSG: for (my $i = 1; $i <= $nm; $i++) {
     my $hdr_lines = $imap->top($i);
     if (!defined($hdr_lines) || ref($hdr_lines) ne 'ARRAY') {
